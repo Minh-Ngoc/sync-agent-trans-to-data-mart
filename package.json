@@ -1,0 +1,19 @@
+{
+  "name": "sync-data-mongo-to-postgresql",
+  "version": "1.0.0",
+  "description": "Dong bo du lieu tu MongoDB (aggregation pipeline) sang PostgreSQL, chay batch-commit, ho tro worker_threads va gioi han tai nguyen cho production.",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node sync-mongo-to-pg.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "mongodb": "^6.9.0",
+    "pg": "^8.13.0",
+    "pg-copy-streams": "^6.0.6"
+  }
+}

@@ -1,0 +1,1509 @@
+[
+  {
+    "$match": {
+      "transtype": {
+        "$in": [
+          "BUY",
+          "BUYCODE",
+          "BILLPAY"
+        ]
+      },
+      "state": 2,
+      "result": 0
+    }
+  },
+  {
+    "$group": {
+      "_id": "$transid",
+      "doc": {
+        "$first": "$$ROOT"
+      }
+    }
+  },
+  {
+    "$replaceRoot": {
+      "newRoot": "$doc"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "agent_trans",
+      "let": {
+        "lid": "$transid"
+      },
+      "pipeline": [
+        {
+          "$match": {
+            "$expr": {
+              "$and": [
+                {
+                  "$eq": [
+                    "$transid",
+                    "$$lid"
+                  ]
+                },
+                {
+                  "$in": [
+                    "$dc",
+                    [
+                      "D",
+                      "C"
+                    ]
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$state",
+                    2
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$result",
+                    0
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$project": {
+            "_id": 1,
+            "transid": 1,
+            "amount": 1,
+            "date": 1,
+            "dc": 1,
+            "transtype": 1,
+            "result": 1,
+            "state": 1,
+            "connector": 1,
+            "agent_ref": 1,
+            "re_agent_ref": 1,
+            "agentid": 1,
+            "re_agentid": 1,
+            "reqid": 1
+          }
+        }
+      ],
+      "as": "agent_trans_rows"
+    }
+  },
+  {
+    "$addFields": {
+      "agent_trans_d": {
+        "$arrayElemAt": [
+          {
+            "$filter": {
+              "input": "$agent_trans_rows",
+              "as": "item",
+              "cond": {
+                "$eq": [
+                  "$$item.dc",
+                  "D"
+                ]
+              }
+            }
+          },
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$unwind": {
+      "path": "$agent_trans_rows",
+      "preserveNullAndEmptyArrays": false
+    }
+  },
+  {
+    "$addFields": {
+      "current_agent_trans": "$agent_trans_rows"
+    }
+  },
+  {
+    "$addFields": {
+      "cardObj": {
+        "$cond": {
+          "if": {
+            "$isArray": "$card"
+          },
+          "then": {
+            "$arrayElemAt": [
+              "$card",
+              0
+            ]
+          },
+          "else": "$card"
+        }
+      },
+      "dataObj": {
+        "$cond": {
+          "if": {
+            "$isArray": "$data"
+          },
+          "then": {
+            "$arrayElemAt": [
+              "$data",
+              0
+            ]
+          },
+          "else": "$data"
+        }
+      },
+      "specialAgentFirst": {
+        "$arrayElemAt": [
+          {
+            "$split": [
+              {
+                "$ifNull": [
+                  "$special_agent",
+                  ""
+                ]
+              },
+              "."
+            ]
+          },
+          0
+        ]
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "cardType": {
+        "$ifNull": [
+          "$cardObj.cardtype",
+          "$cardObj.cardType"
+        ]
+      },
+      "cardPcode": {
+        "$ifNull": [
+          "$cardObj.providercode",
+          "$cardObj.providerCode"
+        ]
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "filled_date": {
+        "$ifNull": [
+          "$current_agent_trans.date",
+          "$agent_trans_d.date"
+        ]
+      },
+      "filled_transtype": {
+        "$ifNull": [
+          "$current_agent_trans.transtype",
+          "$agent_trans_d.transtype"
+        ]
+      },
+      "filled_result": {
+        "$ifNull": [
+          "$current_agent_trans.result",
+          "$agent_trans_d.result"
+        ]
+      },
+      "filled_state": {
+        "$ifNull": [
+          "$current_agent_trans.state",
+          "$agent_trans_d.state"
+        ]
+      },
+      "filled_connector": {
+        "$ifNull": [
+          "$current_agent_trans.connector",
+          "$agent_trans_d.connector"
+        ]
+      },
+      "filled_agent_ref": {
+        "$ifNull": [
+          "$current_agent_trans.agent_ref",
+          "$agent_trans_d.agent_ref"
+        ]
+      },
+      "filled_re_agent_ref": {
+        "$ifNull": [
+          "$current_agent_trans.re_agent_ref",
+          "$agent_trans_d.re_agent_ref"
+        ]
+      },
+      "filled_agentid": {
+        "$ifNull": [
+          "$current_agent_trans.agentid",
+          "$agent_trans_d.agentid"
+        ]
+      },
+      "filled_re_agentid": {
+        "$ifNull": [
+          "$current_agent_trans.re_agentid",
+          "$agent_trans_d.re_agentid"
+        ]
+      },
+      "filled_reqid": {
+        "$ifNull": [
+          "$current_agent_trans.reqid",
+          "$agent_trans_d.reqid"
+        ]
+      }
+    }
+  },
+  {
+    "$lookup": {
+      "from": "agents",
+      "let": {
+        "aref": {
+          "$switch": {
+            "branches": [
+              {
+                "case": {
+                  "$eq": [
+                    "$current_agent_trans.dc",
+                    "D"
+                  ]
+                },
+                "then": "$current_agent_trans.agent_ref"
+              },
+              {
+                "case": {
+                  "$eq": [
+                    "$current_agent_trans.dc",
+                    "C"
+                  ]
+                },
+                "then": "$current_agent_trans.re_agent_ref"
+              }
+            ],
+            "default": null
+          }
+        }
+      },
+      "pipeline": [
+        {
+          "$match": {
+            "$expr": {
+              "$eq": [
+                "$$aref",
+                "$reference"
+              ]
+            }
+          }
+        },
+        {
+          "$project": {
+            "reference": 1,
+            "agent_type": 1,
+            "default_wallet_type": 1
+          }
+        }
+      ],
+      "as": "agents"
+    }
+  },
+  {
+    "$unwind": {
+      "path": "$agents",
+      "preserveNullAndEmptyArrays": true
+    }
+  },
+  {
+    "$project": {
+      "agent_trans_id": "$current_agent_trans._id",
+      "transid": 1,
+      "amount": "$current_agent_trans.amount",
+      "dc": "$current_agent_trans.dc",
+      "date": "$filled_date",
+      "transtype": "$filled_transtype",
+      "result": "$filled_result",
+      "state": "$filled_state",
+      "connector": "$filled_connector",
+      "agent_ref": "$filled_agent_ref",
+      "re_agent_ref": "$filled_re_agent_ref",
+      "agentid": "$filled_agentid",
+      "re_agentid": "$filled_re_agentid",
+      "reqid": "$filled_reqid",
+      "scode": {
+        "$switch": {
+          "branches": [
+            {
+              "case": {
+                "$and": [
+                  {
+                    "$eq": [
+                      "$transtype",
+                      "BUY"
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$scode",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  }
+                ]
+              },
+              "then": "topup"
+            },
+            {
+              "case": {
+                "$and": [
+                  {
+                    "$eq": [
+                      "$transtype",
+                      "BILLPAY"
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$scode",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  }
+                ]
+              },
+              "then": "$dataObj.scode"
+            }
+          ],
+          "default": "$scode"
+        }
+      },
+      "pcode": {
+        "$switch": {
+          "branches": [
+            {
+              "case": {
+                "$and": [
+                  {
+                    "$eq": [
+                      "$transtype",
+                      "BUY"
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$pcode",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$telco",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  }
+                ]
+              },
+              "then": "$specialAgentFirst"
+            },
+            {
+              "case": {
+                "$and": [
+                  {
+                    "$eq": [
+                      "$transtype",
+                      "BUY"
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$pcode",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  }
+                ]
+              },
+              "then": "$telco"
+            },
+            {
+              "case": {
+                "$and": [
+                  {
+                    "$eq": [
+                      "$transtype",
+                      "BUYCODE"
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$pcode",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  }
+                ]
+              },
+              "then": "$cardPcode"
+            },
+            {
+              "case": {
+                "$eq": [
+                  {
+                    "$ifNull": [
+                      "$pcode",
+                      null
+                    ]
+                  },
+                  null
+                ]
+              },
+              "then": "$dataObj.pcode"
+            }
+          ],
+          "default": "$pcode"
+        }
+      },
+      "tcode": {
+        "$switch": {
+          "branches": [
+            {
+              "case": {
+                "$and": [
+                  {
+                    "$eq": [
+                      "$transtype",
+                      "BUYCODE"
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$tcode",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$cardType",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  }
+                ]
+              },
+              "then": "$dataObj.amount"
+            },
+            {
+              "case": {
+                "$and": [
+                  {
+                    "$eq": [
+                      "$transtype",
+                      "BUYCODE"
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$ifNull": [
+                          "$tcode",
+                          null
+                        ]
+                      },
+                      null
+                    ]
+                  }
+                ]
+              },
+              "then": "$cardType"
+            }
+          ],
+          "default": "$tcode"
+        }
+      },
+      "agent_type": "$agents.agent_type",
+      "default_wallet_type": "$agents.default_wallet_type",
+      "reference": "$agents.reference",
+      "debitor": "$debitor",
+      "creditor": "$creditor",
+      "last_update": "$lastupdate"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "bonus_in",
+      "let": {
+        "ltransType": "$transtype",
+        "lscode": "$scode",
+        "lpcode": "$pcode",
+        "lconnector": "$connector",
+        "ltcode": "$tcode",
+        "ldate": "$date",
+        "ldc": "$dc"
+      },
+      "pipeline": [
+        {
+          "$addFields": {
+            "fromTs": {
+              "$toLong": "$fromDate"
+            },
+            "toTs": {
+              "$cond": [
+                {
+                  "$ne": [
+                    "$toDate",
+                    null
+                  ]
+                },
+                {
+                  "$toLong": "$toDate"
+                },
+                null
+              ]
+            }
+          }
+        },
+        {
+          "$match": {
+            "$expr": {
+              "$and": [
+                {
+                  "$eq": [
+                    "$$ldc",
+                    "D"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$status",
+                    "active"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$transType",
+                    "$$ltransType"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$$lscode",
+                    "$scode"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$$lpcode",
+                    "$pcode"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$connector",
+                    "$$lconnector"
+                  ]
+                },
+                {
+                  "$lte": [
+                    "$fromTs",
+                    "$$ldate"
+                  ]
+                },
+                {
+                  "$or": [
+                    {
+                      "$eq": [
+                        "$toDate",
+                        null
+                      ]
+                    },
+                    {
+                      "$gte": [
+                        "$toTs",
+                        "$$ldate"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "$or": [
+                    {
+                      "$and": [
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        "$targetCode",
+                        null
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$addFields": {
+            "matchLevel": {
+              "$switch": {
+                "branches": [
+                  {
+                    "case": {
+                      "$and": [
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    "then": 1
+                  },
+                  {
+                    "case": {
+                      "$eq": [
+                        "$targetCode",
+                        null
+                      ]
+                    },
+                    "then": 2
+                  }
+                ],
+                "default": 99
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "matchLevel": 1,
+            "priority": -1,
+            "fromDate": -1
+          }
+        },
+        {
+          "$limit": 1
+        }
+      ],
+      "as": "bonus_in"
+    }
+  },
+  {
+    "$lookup": {
+      "from": "bonus_out",
+      "let": {
+        "ltransType": "$transtype",
+        "lscode": "$scode",
+        "lpcode": "$pcode",
+        "lagentType": "$agent_type",
+        "lreference": "$reference",
+        "ltcode": "$tcode",
+        "ldate": "$date",
+        "ldc": "$dc"
+      },
+      "pipeline": [
+        {
+          "$addFields": {
+            "fromTs": {
+              "$toLong": "$fromDate"
+            },
+            "toTs": {
+              "$cond": [
+                {
+                  "$ne": [
+                    "$toDate",
+                    null
+                  ]
+                },
+                {
+                  "$toLong": "$toDate"
+                },
+                null
+              ]
+            },
+            "safeReferences": {
+              "$cond": [
+                {
+                  "$isArray": "$references"
+                },
+                "$references",
+                []
+              ]
+            }
+          }
+        },
+        {
+          "$match": {
+            "$expr": {
+              "$and": [
+                {
+                  "$eq": [
+                    "$$ldc",
+                    "D"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$status",
+                    "active"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$transType",
+                    "$$ltransType"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$$lscode",
+                    "$scode"
+                  ]
+                },
+                {
+                  "$eq": [
+                    "$$lpcode",
+                    "$pcode"
+                  ]
+                },
+                {
+                  "$lte": [
+                    "$fromTs",
+                    "$$ldate"
+                  ]
+                },
+                {
+                  "$or": [
+                    {
+                      "$eq": [
+                        "$toDate",
+                        null
+                      ]
+                    },
+                    {
+                      "$gte": [
+                        "$toTs",
+                        "$$ldate"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "$or": [
+                    {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$$lagentType",
+                            "$agentType"
+                          ]
+                        },
+                        {
+                          "$gt": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$in": [
+                            "$$lreference",
+                            "$safeReferences"
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$$lagentType",
+                            "$agentType"
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            "$$lagentType"
+                          ]
+                        },
+                        {
+                          "$gt": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$in": [
+                            "$$lreference",
+                            "$safeReferences"
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            null
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            "$$lagentType"
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            null
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            null
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "$addFields": {
+            "matchLevel": {
+              "$switch": {
+                "branches": [
+                  {
+                    "case": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            "$$lagentType"
+                          ]
+                        },
+                        {
+                          "$gt": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$in": [
+                            "$$lreference",
+                            "$safeReferences"
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    "then": 1
+                  },
+                  {
+                    "case": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            "$$lagentType"
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    "then": 2
+                  },
+                  {
+                    "case": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            "$$lagentType"
+                          ]
+                        },
+                        {
+                          "$gt": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$in": [
+                            "$$lreference",
+                            "$safeReferences"
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            null
+                          ]
+                        }
+                      ]
+                    },
+                    "then": 3
+                  },
+                  {
+                    "case": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            "$$lagentType"
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            null
+                          ]
+                        }
+                      ]
+                    },
+                    "then": 4
+                  },
+                  {
+                    "case": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$targetCode",
+                            null
+                          ]
+                        },
+                        {
+                          "$ne": [
+                            "$$ltcode",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            "$$ltcode"
+                          ]
+                        }
+                      ]
+                    },
+                    "then": 5
+                  },
+                  {
+                    "case": {
+                      "$and": [
+                        {
+                          "$eq": [
+                            "$agentType",
+                            null
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            {
+                              "$size": "$safeReferences"
+                            },
+                            0
+                          ]
+                        },
+                        {
+                          "$eq": [
+                            "$targetCode",
+                            null
+                          ]
+                        }
+                      ]
+                    },
+                    "then": 6
+                  }
+                ],
+                "default": 99
+              }
+            }
+          }
+        },
+        {
+          "$sort": {
+            "matchLevel": 1,
+            "priority": -1,
+            "fromDate": -1
+          }
+        },
+        {
+          "$limit": 1
+        }
+      ],
+      "as": "bonus_out"
+    }
+  },
+  {
+    "$project": {
+      "agent_trans_id": 1,
+      "transid": 1,
+      "amount": 1,
+      "dc": 1,
+      "date": 1,
+      "transtype": 1,
+      "result": 1,
+      "state": 1,
+      "connector": 1,
+      "agent_ref": 1,
+      "re_agent_ref": 1,
+      "agentid": 1,
+      "re_agentid": 1,
+      "reqid": 1,
+      "scode": 1,
+      "pcode": 1,
+      "tcode": 1,
+      "agent_type": 1,
+      "default_wallet_type": 1,
+      "reference": 1,
+      "debitor": 1,
+      "creditor": 1,
+      "refund_transid": null,
+      "refund_amount": null,
+      "last_update": 1,
+      "synced_at": 1,
+      "bonus_in_amount": {
+        "$let": {
+          "vars": {
+            "rule": {
+              "$first": "$bonus_in"
+            }
+          },
+          "in": {
+            "$cond": [
+              {
+                "$eq": [
+                  "$$rule",
+                  null
+                ]
+              },
+              0,
+              {
+                "$let": {
+                  "vars": {
+                    "bonus": {
+                      "$add": [
+                        {
+                          "$multiply": [
+                            {
+                              "$abs": "$amount"
+                            },
+                            {
+                              "$divide": [
+                                {
+                                  "$ifNull": [
+                                    "$$rule.percent",
+                                    0
+                                  ]
+                                },
+                                100
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "$ifNull": [
+                            "$$rule.baseAmount",
+                            0
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "in": {
+                    "$let": {
+                      "vars": {
+                        "floorApplied": {
+                          "$cond": [
+                            {
+                              "$ne": [
+                                "$$rule.minAmount",
+                                null
+                              ]
+                            },
+                            {
+                              "$max": [
+                                "$$bonus",
+                                "$$rule.minAmount"
+                              ]
+                            },
+                            "$$bonus"
+                          ]
+                        }
+                      },
+                      "in": {
+                        "$cond": [
+                          {
+                            "$ne": [
+                              "$$rule.maxAmount",
+                              null
+                            ]
+                          },
+                          {
+                            "$min": [
+                              "$$floorApplied",
+                              "$$rule.maxAmount"
+                            ]
+                          },
+                          "$$floorApplied"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "bonus_out_amount": {
+        "$let": {
+          "vars": {
+            "rule": {
+              "$first": "$bonus_out"
+            }
+          },
+          "in": {
+            "$cond": [
+              {
+                "$eq": [
+                  "$$rule",
+                  null
+                ]
+              },
+              0,
+              {
+                "$let": {
+                  "vars": {
+                    "bonus": {
+                      "$add": [
+                        {
+                          "$multiply": [
+                            {
+                              "$abs": "$amount"
+                            },
+                            {
+                              "$divide": [
+                                {
+                                  "$ifNull": [
+                                    "$$rule.percent",
+                                    0
+                                  ]
+                                },
+                                100
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "$ifNull": [
+                            "$$rule.baseAmount",
+                            0
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "in": {
+                    "$let": {
+                      "vars": {
+                        "floorApplied": {
+                          "$cond": [
+                            {
+                              "$ne": [
+                                "$$rule.minAmount",
+                                null
+                              ]
+                            },
+                            {
+                              "$max": [
+                                "$$bonus",
+                                "$$rule.minAmount"
+                              ]
+                            },
+                            "$$bonus"
+                          ]
+                        }
+                      },
+                      "in": {
+                        "$cond": [
+                          {
+                            "$ne": [
+                              "$$rule.maxAmount",
+                              null
+                            ]
+                          },
+                          {
+                            "$min": [
+                              "$$floorApplied",
+                              "$$rule.maxAmount"
+                            ]
+                          },
+                          "$$floorApplied"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "bonus_in_data": {
+        "$first": "$bonus_in"
+      },
+      "bonus_out_data": {
+        "$first": "$bonus_out"
+      }
+    }
+  }
+]
